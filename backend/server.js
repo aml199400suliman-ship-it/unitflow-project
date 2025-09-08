@@ -1,6 +1,7 @@
 // --- server.js (PostgreSQL / Neon) ---
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const { neon } = require('@neondatabase/serverless');
 const bcrypt = require('bcrypt');
 const cors = require('cors');
@@ -10,6 +11,20 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// تقديم ملفات الواجهة من مجلد frontend عند النشر على Render
+const frontendDir = path.join(__dirname, '..', 'frontend');
+app.use(express.static(frontendDir));
+
+// نقطة فحص صحية
+app.get('/healthz', async (req, res) => {
+    try {
+        const v = await sql`SELECT now() as now`;
+        res.json({ status: 'ok', time: v[0]?.now });
+    } catch (e) {
+        res.status(500).json({ status: 'error', error: e.message });
+    }
+});
 
 // --- اتصال Neon PostgreSQL ---
 if (!process.env.DATABASE_URL) {
@@ -220,5 +235,10 @@ app.get('/api/stats', withDB, async (req, res) => {
 // --- تشغيل الخادم ---
 app.listen(PORT, () => {
     console.log(`🚀 UnitFlow Backend is running on http://localhost:${PORT}`);
+});
+
+// إعادة توجيه أي مسار غير API لملفات الواجهة (index.html)
+app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.join(frontendDir, 'index.html'));
 });
 ////////عزام//////////////
