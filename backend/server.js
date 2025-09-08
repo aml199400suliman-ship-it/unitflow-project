@@ -1,4 +1,4 @@
-// --- server.js (PostgreSQL / Neon) ---
+// --- server.js (محسّن للعمل مع Render + Neon PostgreSQL) ---
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
@@ -9,28 +9,16 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// --- إعدادات أساسية ---
 app.use(cors());
 app.use(express.json());
 
-// تقديم ملفات الواجهة من مجلد frontend عند النشر على Render
-const frontendDir = path.join(__dirname, '..', 'frontend');
-app.use(express.static(frontendDir));
-
-// نقطة فحص صحية
-app.get('/healthz', async (req, res) => {
-    try {
-        const v = await sql`SELECT now() as now`;
-        res.json({ status: 'ok', time: v[0]?.now });
-    } catch (e) {
-        res.status(500).json({ status: 'error', error: e.message });
-    }
-});
-
 // --- اتصال Neon PostgreSQL ---
 if (!process.env.DATABASE_URL) {
-    console.warn('DATABASE_URL is not set. Please configure it in your environment.');
+    console.error("❌ DATABASE_URL is not set!");
+    process.exit(1);
 }
-const sql = neon(process.env.DATABASE_URL || '');
+const sql = neon(process.env.DATABASE_URL);
 
 // وسيط يضيف sql للطلب
 const withDB = async (req, res, next) => {
@@ -43,14 +31,29 @@ const withDB = async (req, res, next) => {
     }
 };
 
-// --- مسارات API ---
+// --- مسار فحص الاتصال (Health Check) ---
+app.get('/healthz', async (req, res) => {
+    try {
+        const v = await sql`SELECT now() as now`;
+        res.json({ status: 'ok', time: v[0]?.now });
+    } catch (e) {
+        console.error("❌ DB Error:", e.message);
+        res.status(500).json({ status: 'error', error: e.message });
+    }
+});
 
-// المسار الرئيسي
+// --- تقديم ملفات الواجهة من مجلد frontend ---
+const frontendDir = path.join(__dirname, '..', 'frontend');
+app.use(express.static(frontendDir));
+
+// --- API Routes ---
+
+// اختبار API
 app.get('/api', (req, res) => {
     res.json({ message: 'Welcome to UnitFlow API v2.0!' });
 });
 
-// ## مسار تسجيل الدخول ##
+// تسجيل الدخول
 app.post('/api/login', withDB, async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -59,26 +62,30 @@ app.post('/api/login', withDB, async (req, res) => {
 
     try {
         const results = await req.sql`SELECT * FROM employees WHERE username = ${username}`;
-
         if (results.length === 0) {
             return res.status(401).json({ message: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
         }
 
         const user = results[0];
-        // دعم كلمات المرور النصية أو المشفرة
         let isPasswordMatch = false;
         if (user.password === password) {
             isPasswordMatch = true;
         } else {
             try {
                 isPasswordMatch = await bcrypt.compare(password, user.password);
-            } catch (e) {
+            } catch {
                 isPasswordMatch = false;
             }
         }
 
         if (isPasswordMatch) {
-            const userPayload = { id: user.id, name: user.name, username: user.username, department: user.department, work_page: user.work_page };
+            const userPayload = {
+                id: user.id,
+                name: user.name,
+                username: user.username,
+                department: user.department,
+                work_page: user.work_page
+            };
             res.status(200).json(userPayload);
         } else {
             res.status(401).json({ message: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
@@ -89,10 +96,9 @@ app.post('/api/login', withDB, async (req, res) => {
     }
 });
 
-// مسار إعداد سريع لإضافة مستخدمين افتراضيين عند الحاجة (لبيئة Render)
+// إعداد مستخدمين افتراضيين
 app.post('/api/setup-users', withDB, async (req, res) => {
     try {
-        // إنشاء الجداول إذا لم تكن موجودة
         await req.sql`CREATE TABLE IF NOT EXISTS employees (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
@@ -123,7 +129,6 @@ app.post('/api/setup-users', withDB, async (req, res) => {
             timestamp TIMESTAMP DEFAULT NOW()
         )`;
 
-        // حذف وإعادة إدخال المستخدمين الافتراضيين
         await req.sql`DELETE FROM employees WHERE username IN ('admin','azam','sufyan')`;
         await req.sql`INSERT INTO employees (name, username, password, department, work_page)
                       VALUES ('مدير النظام','admin','admin123','management','admin.html'),
@@ -137,8 +142,7 @@ app.post('/api/setup-users', withDB, async (req, res) => {
     }
 });
 
-
-// --- CRUD: الوحدات (Units) ---
+// --- CRUD: الوحدات ---
 app.get('/api/units', withDB, async (req, res) => {
     try {
         const units = await req.sql`SELECT * FROM units ORDER BY last_movement_time DESC`;
@@ -153,7 +157,7 @@ app.post('/api/units', withDB, async (req, res) => {
                       VALUES (${id}, ${type}, 'operations', 'ready_for_loading', NOW())`;
         res.status(201).json({ message: 'تمت إضافة الوحدة بنجاح' });
     } catch (err) {
-        if (err.code === '23505') return res.status(409).json({ message: 'رقم الوحدة مستخدم بالفعل.' }); // unique_violation
+        if (err.code === '23505') return res.status(409).json({ message: 'رقم الوحدة مستخدم بالفعل.' });
         res.status(500).json({ error: err.message });
     }
 });
@@ -173,7 +177,7 @@ app.delete('/api/units/:id', withDB, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- CRUD: الموظفون (Employees) ---
+// --- CRUD: الموظفون ---
 app.get('/api/employees', withDB, async (req, res) => {
     try {
         const employees = await req.sql`SELECT id, name, username, department, work_page FROM employees`;
@@ -215,7 +219,6 @@ app.put('/api/employees/:id', withDB, async (req, res) => {
 });
 
 app.delete('/api/employees/:id', withDB, async (req, res) => {
-    // يمنع حذف المدير الرئيسي (ID=1)
     if (req.params.id === '1') {
         return res.status(403).json({ message: 'لا يمكن حذف المدير الرئيسي.' });
     }
@@ -225,22 +228,18 @@ app.delete('/api/employees/:id', withDB, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-
-// --- الحركات والتقارير (Movements & Reports) ---
+// --- الحركات ---
 app.put('/api/units/:id/move', withDB, async (req, res) => {
     const { targetDepartment, targetSection, employeeId, movementType, notes } = req.body;
     const unitId = req.params.id;
 
     try {
-        // الخطوة 1: الحصول على الحالة القديمة
         const units = await req.sql`SELECT * FROM units WHERE id = ${unitId}`;
         if (units.length === 0) return res.status(404).json({ message: 'Unit not found' });
         const oldUnit = units[0];
 
-        // الخطوة 2: تحديث الوحدة
         await req.sql`UPDATE units SET current_department = ${targetDepartment}, current_section = ${targetSection}, last_movement_time = NOW() WHERE id = ${unitId}`;
 
-        // الخطوة 3: تسجيل الحركة
         await req.sql`INSERT INTO movements
                        (unit_id, employee_id, movement_type, from_department, to_department, from_section, to_section, notes, timestamp)
                        VALUES (${unitId}, ${employeeId}, ${movementType}, ${oldUnit.current_department}, ${targetDepartment}, ${oldUnit.current_section}, ${targetSection}, ${notes || ''}, NOW())`;
@@ -255,7 +254,6 @@ app.put('/api/units/:id/move', withDB, async (req, res) => {
 app.get('/api/movements', withDB, async (req, res) => {
     try {
         let whereParts = [];
-        let params = [];
         if (req.query.unitId) { whereParts.push(sql`m.unit_id = ${req.query.unitId}`); }
         if (req.query.employeeId) { whereParts.push(sql`m.employee_id = ${req.query.employeeId}`); }
         if (req.query.dateFrom) { whereParts.push(sql`m.timestamp >= ${req.query.dateFrom}`); }
@@ -272,7 +270,7 @@ app.get('/api/movements', withDB, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- مسار الإحصائيات (Dashboard Stats) ---
+// --- Dashboard Stats ---
 app.get('/api/stats', withDB, async (req, res) => {
     try {
         const totalUnitsRow = await req.sql`SELECT COUNT(*)::int as count FROM units`;
@@ -289,14 +287,12 @@ app.get('/api/stats', withDB, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-
 // --- تشغيل الخادم ---
 app.listen(PORT, () => {
     console.log(`🚀 UnitFlow Backend is running on http://localhost:${PORT}`);
 });
 
-// إعادة توجيه أي مسار غير API لملفات الواجهة (index.html)
+// --- إعادة توجيه أي مسار غير API لواجهة frontend ---
 app.get(/^(?!\/api).*/, (req, res) => {
     res.sendFile(path.join(frontendDir, 'index.html'));
 });
-////////عزام//////////////
