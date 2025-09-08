@@ -1,19 +1,32 @@
 {
-  "name": "unitflow-backend",
+  "name": "unitflow-project",
   "version": "1.0.0",
-  "description": "Backend for UnitFlow application",
-  "main": "server.js",
+  "description": "UnitFlow - إدارة الوحدات والحركات مع PostgreSQL Neon",
+  "main": "backend/server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node backend/server.js",
+    "dev": "nodemon backend/server.js"
+  },
+  "engines": {
+    "node": "20.x"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.8.1",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "mysql2": "^3.10.0"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
   },
-  {
-  "engines":  {  "node":  "22.16"},
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "keywords": [
+    "express",
+    "postgresql",
+    "neon",
+    "render",
+    "unitflow"
+  ],
+  "author": "Azzam",
+  "license": "MIT"
 }
-}
-
