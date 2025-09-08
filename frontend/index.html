@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>تسجيل الدخول - UnitFlow</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+        /* إضافة تأثيرات إضافية للصفحة */
+        .login-form input:focus {
+            transform: translateY(-2px);
+        }
+        
+        .login-form button:focus {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+        
+        /* تأثير الكتابة */
+        .login-form input:not(:placeholder-shown) {
+            border-color: var(--success-color);
+        }
+        
+        /* تحسينات للواجهة */
+        .login-container {
+            animation: fadeInUp 0.6s ease-out;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="center-frame">
+        <div class="login-container">
+            <h1>أهلاً بك في UnitFlow</h1>
+            <p style="text-align: center; color: #666; margin-bottom: 20px;">قم بتسجيل الدخول للمتابعة</p>
+            
+            <div id="errorMessage" class="error-message"></div>
+
+            <form id="loginForm" class="login-form">
+                <input type="text" id="username" placeholder="اسم المستخدم" required autocomplete="username">
+                <input type="password" id="password" placeholder="كلمة المرور" required autocomplete="current-password">
+                <button type="submit">تسجيل الدخول</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        // Redirect if already logged in
+        if (getLoggedUser()) {
+            window.location.href = 'dashboard.html';
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const errorMessageDiv = document.getElementById('errorMessage');
+            const submitButton = e.target.querySelector('button[type="submit"]');
+
+            // إخفاء رسائل الخطأ السابقة
+            errorMessageDiv.style.display = 'none';
+            errorMessageDiv.className = 'error-message';
+
+            // التحقق من صحة البيانات
+            if (!username || !password) {
+                errorMessageDiv.textContent = 'يرجى إدخال اسم المستخدم وكلمة المرور';
+                errorMessageDiv.style.display = 'block';
+                return;
+            }
+
+            // إظهار حالة التحميل
+            submitButton.disabled = true;
+            submitButton.textContent = 'جاري تسجيل الدخول...';
+            submitButton.classList.add('loading');
+
+            try {
+                const user = await db.login(username, password);
+                if (user && user.id) {
+                    // إظهار رسالة نجاح مؤقتة
+                    errorMessageDiv.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                    errorMessageDiv.className = 'success-message';
+                    errorMessageDiv.style.display = 'block';
+                    
+                    // تأخير قصير قبل التوجيه
+                    setTimeout(() => {
+                        saveUserAndRedirect(user);
+                    }, 1000);
+                } else {
+                    throw new Error('فشل في الحصول على بيانات المستخدم');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                errorMessageDiv.textContent = error.message || 'فشل تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.';
+                errorMessageDiv.style.display = 'block';
+            } finally {
+                // إعادة تعيين حالة الزر
+                submitButton.disabled = false;
+                submitButton.textContent = 'تسجيل الدخول';
+                submitButton.classList.remove('loading');
+            }
+        });
+    </script>
+</body>
+</html>

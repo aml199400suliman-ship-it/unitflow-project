@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>لوحة التحكم - UnitFlow</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .nav-card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            text-align: center;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .nav-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+        .nav-card h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .nav-card p {
+            color: #666;
+            font-size: 14px;
+        }
+        .nav-card a {
+            display: block;
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #4dabf7;
+            color: white;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header"><h2>UnitFlow</h2></div>
+        <ul class="sidebar-menu">
+            <li><a href="dashboard.html" class="active">لوحة التحكم</a></li>
+            </ul>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h1>لوحة التحكم الرئيسية</h1>
+            <div class="user-info">
+                <span id="userName">مرحباً</span>
+                <button class="logout-btn" onclick="logout()">تسجيل الخروج</button>
+            </div>
+        </div>
+
+        <div class="stats-container" id="statsContainer">
+            </div>
+
+        <div class="nav-grid">
+            <div class="nav-card">
+                <h2>إدارة النظام</h2>
+                <p>إدارة الموظفين، الوحدات، واستخراج التقارير.</p>
+                <a href="admin.html">الانتقال إلى الإدارة</a>
+            </div>
+            <div class="nav-card">
+                <h2>قسم العمليات</h2>
+                <p>متابعة حركة الوحدات من التحميل إلى التسليم.</p>
+                <a href="operations.html">الانتقال إلى العمليات</a>
+            </div>
+            <div class="nav-card">
+                <h2>القسم الفني</h2>
+                <p>متابعة الوحدات التي تحتاج إلى صيانة.</p>
+                <a href="technical.html">الانتقال إلى القسم الفني</a>
+            </div>
+             <div class="nav-card">
+                <h2>القسم التجاري</h2>
+                <p>متابعة المستندات والأوراق التجارية للوحدات.</p>
+                <a href="commercial.html">الانتقال إلى القسم التجاري</a>
+            </div>
+             <div class="nav-card">
+                <h2>قسم الوقود</h2>
+                <p>إدارة ومتابعة تزويد الوحدات بالوقود.</p>
+                <a href="fuel.html">الانتقال إلى قسم الوقود</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!requireAuth('index.html')) return;
+            ensureAuthUI('userName');
+            
+            // Load stats
+            try {
+                const stats = await db.getStats();
+                const container = document.getElementById('statsContainer');
+                container.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.totalUnits || 0}</div>
+                        <div class="stat-label">إجمالي الوحدات</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.unitsInOps || 0}</div>
+                        <div class="stat-label">وحدات في العمليات</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.unitsInTech || 0}</div>
+                        <div class="stat-label">وحدات في الصيانة</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.totalEmployees || 0}</div>
+                        <div class="stat-label">إجمالي الموظفين</div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error("Failed to load stats:", error);
+            }
+        });
+    </script>
+</body>
+</html>
